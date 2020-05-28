@@ -7,10 +7,21 @@ from elasticsearch import Elasticsearch
 
 depth_ = 5
 
-
 def create_index(index, es):
     if not es.indices.exists(index_name):
-        es.indices.create(index, ignore=400)
+        mapp = '''
+        {
+              "mappings": {
+                    "properties": {
+                        "date": {
+                          "type": "date",
+                           "format": "yyyy-MM-dd HH:mm:ss"
+                        }
+                    }
+                }
+        }
+        '''
+        es.indices.create(index, body=mapp, ignore=400)
     return es
 
 
@@ -70,15 +81,15 @@ def scan_dir(folder_path, depth, es):
         except PermissionError:
             # TODO
             None
-        data['total_size_bit'] = sum([subfolders[s]['total_size_bit'] for s in subfolders])
+        data['total_size_bit'] = sum([subfolders[s]['total_size_bytes'] for s in subfolders])
         for directory in os.scandir(folder_path):
             subdirectory = os.path.join(folder_path, directory)
             data['total_size_bit'] += get_directory_size(subdirectory) if directory.is_file(
                 follow_symlinks=False) else 0
-        data['total_size'] = convert_size(data['total_size_bit'])
+        data['total_size'] = convert_size(data['total_size_bytes'])
     else:
         directory_size = get_directory_size(folder_path)
-        data['total_size_bit'] = directory_size
+        data['total_size_bytes'] = directory_size
         data['total_size'] = convert_size(directory_size)
     data['time'] = round(time.time() - start_time, 2)
     data['path'] = folder_path
@@ -86,10 +97,10 @@ def scan_dir(folder_path, depth, es):
     #print(json.dumps(data))
     data_for_elastic = {
         'folder_name': folder_path,
-        'size': data['total_size_bit'],
+        'size': data['total_size_bytes'],
         'duration': data['time'],
         'depth': data['depth'],
-        'date': datetime.now().timestamp() * 1000
+        'date': datetime.now()
     }
     print(data_for_elastic)
     #print(es.indices)
